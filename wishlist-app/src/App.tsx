@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Routes, Route, Link, useParams } from 'react-router-dom'
 import type { WishlistItem, Category } from './types/wishlist'
 import './styles/App.css'
@@ -38,6 +38,19 @@ function App() {
           notifyOnDrop: (raw as WishlistItem).notifyOnDrop ?? false,
         }
 
+        // Als thumbnailUrl nog een favicon is, negeren we die zodat alleen eigen uploads overblijven
+        if (base.url && base.thumbnailUrl) {
+          try {
+            const parsedUrl = new URL(base.url)
+            const faviconUrl = `${parsedUrl.origin}/favicon.ico`
+            if (base.thumbnailUrl === faviconUrl) {
+              base.thumbnailUrl = undefined
+            }
+          } catch {
+            // als de URL ongeldig is, doen we niets
+          }
+        }
+
         // Initialiseer een eenvoudige priceHistory als die nog niet bestaat maar er wél een prijs is
         if (!base.priceHistory && typeof base.price === 'number') {
           base.priceHistory = [{ date: base.createdAt, price: base.price }]
@@ -52,6 +65,8 @@ function App() {
       return []
     }
   })
+
+  const [showAddForm, setShowAddForm] = useState(false)
 
   // Save items to localStorage whenever they change
   useEffect(() => {
@@ -98,6 +113,14 @@ function App() {
     )
   }
 
+  const updateItemImage = (id: string, imageDataUrl: string) => {
+    setItems((prev: WishlistItem[]) =>
+      prev.map((item: WishlistItem) =>
+        item.id === id ? { ...item, thumbnailUrl: imageDataUrl } : item,
+      ),
+    )
+  }
+
   const recentItems = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8)
 
   return (
@@ -122,15 +145,34 @@ function App() {
           <Route
             path="/"
             element={
-              <>
-                <AddItemForm onAddItem={addItem} />
-                <ItemList
-                  items={recentItems}
-                  onToggleCompleted={toggleCompleted}
-                  onDeleteItem={deleteItem}
-                  showCategory
-                />
-              </>
+              <div className="page-layout">
+                <div className="page-top">
+                  <div className={`add-item-collapsible ${showAddForm ? 'open' : ''}`}>
+                    <AddItemForm onAddItem={addItem} />
+                  </div>
+
+                  <section className={`add-item-toggle-bar ${showAddForm ? 'open' : ''}`}>
+                    <button
+                      type="button"
+                      className={`add-item-toggle ${showAddForm ? 'open' : ''}`}
+                      onClick={() => setShowAddForm((prev) => !prev)}
+                    >
+                      <span className="add-item-toggle-label">Nieuw artikel</span>
+                      <span className="add-item-toggle-icon">{showAddForm ? '–' : '+'}</span>
+                    </button>
+                  </section>
+                </div>
+
+                <div className="page-scroll">
+                  <ItemList
+                    items={recentItems}
+                    onToggleCompleted={toggleCompleted}
+                    onDeleteItem={deleteItem}
+                    onUpdateImage={updateItemImage}
+                    showCategory
+                  />
+                </div>
+              </div>
             }
           />
           <Route
@@ -140,6 +182,7 @@ function App() {
                 items={items}
                 onToggleCompleted={toggleCompleted}
                 onDeleteItem={deleteItem}
+                onUpdateImage={updateItemImage}
               />
             }
           />
@@ -159,6 +202,7 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
     note: '',
     category: 'overig' as Category,
   })
+  const [showDetails, setShowDetails] = useState(false)
 
   const suggestCategory = (title: string, url: string): Category => {
     const lowerTitle = title.toLowerCase()
@@ -278,15 +322,6 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
     }
   }
 
-  const deriveThumbnailFromUrl = (url: string): string | undefined => {
-    try {
-      const parsed = new URL(url)
-      return `${parsed.origin}/favicon.ico`
-    } catch {
-      return undefined
-    }
-  }
-
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
@@ -307,7 +342,7 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
       price: formData.price ? parseFloat(formData.price) : undefined,
       deadline: formData.deadline || undefined,
       note: formData.note.trim() || undefined,
-      thumbnailUrl: deriveThumbnailFromUrl(cleanedUrl),
+      thumbnailUrl: undefined,
       category: finalCategory,
     })
 
@@ -352,9 +387,12 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
 
   return (
     <section className="add-item-section">
-      <h2>Nieuw item toevoegen</h2>
+      <div className="add-item-header">
+        <h2 className="add-item-title">Nieuw item</h2>
+        <p className="add-item-subtitle">Voeg een product toe aan jullie wishlist.</p>
+      </div>
       <form onSubmit={handleSubmit} className="add-item-form">
-        {/* URL bovenaan, volledige breedte */}
+        {/* Rij 1: URL, volledige breedte */}
         <div className="form-group">
           <label htmlFor="url">URL *</label>
           <input
@@ -368,7 +406,7 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
           />
         </div>
 
-        {/* Daaronder: naam, prijs, deadline naast elkaar (op desktop) */}
+        {/* Rij 2: naam, prijs, deadline */}
         <div className="form-row form-row-3">
           <div className="form-group">
             <label htmlFor="title">Naam *</label>
@@ -409,40 +447,54 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
           </div>
         </div>
 
-        {/* Categorie dropdown */}
-        <div className="form-group">
-          <label htmlFor="category">Categorie</label>
-          <select
-            id="category"
-            name="category"
-            value={formData.category}
-            onChange={handleChange}
+        <div className="form-details-toggle">
+          <button
+            type="button"
+            className="details-toggle-btn"
+            onClick={() => setShowDetails((prev) => !prev)}
           >
-            <option value="keuken">Keuken</option>
-            <option value="badkamer">Badkamer</option>
-            <option value="woonkamer">Woonkamer</option>
-            <option value="gadgets">Gadgets</option>
-            <option value="kleding">Kleding</option>
-            <option value="overig">Overig</option>
-          </select>
+            {showDetails ? 'Minder details' : 'Meer details'}
+          </button>
         </div>
 
-        {/* Notitie onder de overige velden */}
-        <div className="form-group">
-          <label htmlFor="note">Notitie</label>
-          <textarea
-            id="note"
-            name="note"
-            value={formData.note}
-            onChange={handleChange}
-            placeholder="Extra informatie..."
-            rows={3}
-          />
-        </div>
+        {showDetails && (
+          <>
+            <div className="form-group">
+              <label htmlFor="category">Categorie</label>
+              <select
+                id="category"
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+              >
+                <option value="keuken">Keuken</option>
+                <option value="badkamer">Badkamer</option>
+                <option value="woonkamer">Woonkamer</option>
+                <option value="gadgets">Gadgets</option>
+                <option value="kleding">Kleding</option>
+                <option value="overig">Overig</option>
+              </select>
+            </div>
 
-        <button type="submit" className="submit-btn">
-          Item toevoegen
-        </button>
+            <div className="form-group">
+              <label htmlFor="note">Notitie</label>
+              <textarea
+                id="note"
+                name="note"
+                value={formData.note}
+                onChange={handleChange}
+                placeholder="Extra informatie..."
+                rows={3}
+              />
+            </div>
+          </>
+        )}
+
+        <div className="form-actions">
+          <button type="submit" className="submit-btn">
+            Item toevoegen
+          </button>
+        </div>
       </form>
     </section>
   )
@@ -453,19 +505,43 @@ function ItemList({
   items, 
   onToggleCompleted, 
   onDeleteItem,
+  onUpdateImage,
   showCategory = false,
 }: { 
   items: WishlistItem[]
   onToggleCompleted: (id: string) => void
   onDeleteItem: (id: string) => void
+  onUpdateImage: (id: string, imageDataUrl: string) => void
   showCategory?: boolean
 }) {
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('nl-NL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    })
+  const [activePasteItemId, setActivePasteItemId] = useState<string | null>(null)
+  const pasteInputRef = useRef<HTMLTextAreaElement | null>(null)
+
+  const handlePasteFromClipboard = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!activePasteItemId) return
+
+    const clipboardItems = event.clipboardData?.items
+    if (!clipboardItems) return
+
+    for (let i = 0; i < clipboardItems.length; i += 1) {
+      const clipboardItem = clipboardItems[i]
+      if (!clipboardItem.type.startsWith('image/')) continue
+
+      const file = clipboardItem.getAsFile()
+      if (!file) continue
+
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result
+        if (typeof result === 'string') {
+          onUpdateImage(activePasteItemId, result)
+        }
+      }
+      reader.readAsDataURL(file)
+
+      event.preventDefault()
+      break
+    }
   }
 
   const formatPrice = (price: number) => {
@@ -491,8 +567,36 @@ function ItemList({
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  const handleImageChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    id: string,
+  ) => {
+    e.stopPropagation()
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result
+      if (typeof result === 'string') {
+        onUpdateImage(id, result)
+      }
+    }
+    reader.readAsDataURL(file)
+
+    // allow re-selecting the same file later
+    e.target.value = ''
+  }
+
   return (
     <section className="item-list-section">
+      <textarea
+        ref={pasteInputRef}
+        className="paste-capture"
+        aria-hidden="true"
+        tabIndex={-1}
+        onPaste={handlePasteFromClipboard}
+      />
       <h2>Wishlist items ({items.length})</h2>
       
       {items.length === 0 ? (
@@ -513,43 +617,74 @@ function ItemList({
                 }
               }}
             >
-              <div className="item-tabs">
+              <div
+                className="item-image-area"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setActivePasteItemId(item.id)
+                  if (pasteInputRef.current) {
+                    pasteInputRef.current.focus()
+                  }
+                }}
+              >
                 <button
+                  type="button"
+                  className={`item-complete-toggle ${item.completed ? 'completed' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
                     onToggleCompleted(item.id)
                   }}
-                  className={`tab-btn status-tab ${item.completed ? 'completed' : ''}`}
+                  aria-label={item.completed ? 'Markeer als niet voltooid' : 'Markeer als voltooid'}
                 >
-                  Voltooid
+                  ✓
                 </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDeleteItem(item.id)
-                  }}
-                  className="tab-btn delete-tab"
-                  aria-label="Verwijder item"
-                >
-                  ×
-                </button>
-              </div>
 
-              <div className="item-header">
-                <div className="item-thumbnail-wrapper">
-                  {item.thumbnailUrl ? (
+                {item.thumbnailUrl ? (
+                  <>
                     <img
                       src={item.thumbnailUrl}
                       alt={item.title}
-                      className="item-thumbnail"
+                      className="item-main-image"
                     />
-                  ) : (
-                    <div className="item-thumbnail placeholder">
-                      {new URL(item.url).hostname.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <div className="item-header-main">
+                    <input
+                      id={`upload-${item.id}`}
+                      type="file"
+                      accept="image/*"
+                      className="image-upload-input"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleImageChange(e, item.id)}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label
+                      className="image-upload-placeholder"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setActivePasteItemId(item.id)
+                        if (pasteInputRef.current) {
+                          pasteInputRef.current.focus()
+                        }
+                      }}
+                    >
+                      <span className="plus-icon">+</span>
+                    </label>
+                    <input
+                      id={`upload-${item.id}`}
+                      type="file"
+                      accept="image/*"
+                      className="image-upload-input"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleImageChange(e, item.id)}
+                    />
+                  </>
+                )}
+              </div>
+
+              <p className="item-shop">{getShopName(item.url)}</p>
+
+              <div className="item-body">
+                <div className="item-body-header">
                   <h3 className={`item-title ${item.completed ? 'completed-title' : ''}`}>
                     {item.title}
                   </h3>
@@ -559,39 +694,26 @@ function ItemList({
                     </span>
                   )}
                 </div>
-              </div>
-              
-              <div className="item-content">
-                <p className="item-shop">
-                  <strong>Webshop:</strong> {getShopName(item.url)}
-                </p>
-                
-                {item.price && (
-                  <p className="item-price">
-                    <strong>Prijs:</strong> {formatPrice(item.price)}
-                  </p>
-                )}
-                
-                {item.deadline && (
-                  <p className="item-deadline">
-                    <strong>Deadline:</strong> {formatDate(item.deadline)}
-                  </p>
-                )}
-                
-                {item.note && (
-                  <p className="item-note">
-                    <strong>Notitie:</strong> {item.note}
-                  </p>
-                )}
-                
-                <p className="item-date">
-                  <strong>Toegevoegd:</strong> {formatDate(item.createdAt)}
-                  {item.completed && item.completedAt && (
-                    <span className="completed-date">
-                      <br /><strong>Voltooid:</strong> {formatDate(item.completedAt)}
-                    </span>
+
+                <div className="item-footer">
+                  {item.price && (
+                    <div className="item-price-pill">
+                      {formatPrice(item.price)}
+                    </div>
                   )}
-                </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="item-delete-btn"
+                  aria-label="Verwijder item"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteItem(item.id)
+                  }}
+                >
+                  ×
+                </button>
               </div>
             </div>
           ))}
@@ -605,10 +727,12 @@ function CategoryPage({
   items,
   onToggleCompleted,
   onDeleteItem,
+  onUpdateImage,
 }: {
   items: WishlistItem[]
   onToggleCompleted: (id: string) => void
   onDeleteItem: (id: string) => void
+  onUpdateImage: (id: string, imageDataUrl: string) => void
 }) {
   const params = useParams<{ category: Category }>()
   const categoryParam = (params.category ?? 'overig') as Category
@@ -625,17 +749,23 @@ function CategoryPage({
   }
 
   return (
-    <>
-      <section className="item-list-section">
-        <h2>{labelMap[categoryParam]} items ({filtered.length})</h2>
-      </section>
-      <ItemList
-        items={filtered}
-        onToggleCompleted={onToggleCompleted}
-        onDeleteItem={onDeleteItem}
-        showCategory
-      />
-    </>
+    <div className="page-layout">
+      <div className="page-top">
+        <section className="item-list-section">
+          <h2>{labelMap[categoryParam]} items ({filtered.length})</h2>
+        </section>
+      </div>
+
+      <div className="page-scroll">
+        <ItemList
+          items={filtered}
+          onToggleCompleted={onToggleCompleted}
+          onDeleteItem={onDeleteItem}
+          onUpdateImage={onUpdateImage}
+          showCategory
+        />
+      </div>
+    </div>
   )
 }
 
