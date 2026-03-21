@@ -1,77 +1,150 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Routes, Route, Link, useParams } from 'react-router-dom'
 import type { WishlistItem, Category } from './types/wishlist'
+import { scrapeUrl } from './utils/scraper'
+import { Notepad } from './components/Notepad'
 import './styles/App.css'
 
 function App() {
-  const [items, setItems] = useState<WishlistItem[]>(() => {
-    const saved = localStorage.getItem("wishlist")
-    if (!saved) return []
+  const [items, setItems] = useState<WishlistItem[]>([])
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [isLoadingFromBackend, setIsLoadingFromBackend] = useState(true)
+  const [isPriceCheckComplete, setIsPriceCheckComplete] = useState(false)
+  const [showPriceCheckNotification, setShowPriceCheckNotification] = useState(false)
 
-    try {
-      const parsed = JSON.parse(saved)
-
-      if (!Array.isArray(parsed)) {
-        console.warn("Wishlist data in localStorage is not an array, ignoring.")
-        return []
-      }
-
-      const withDefaults: WishlistItem[] = parsed.map((raw: Partial<WishlistItem>) => {
-        const category: Category = (raw as WishlistItem).category ?? "overig"
-
-        const base: WishlistItem = {
-          id: raw.id ?? crypto.randomUUID(),
-          title: raw.title ?? "Onbekend item",
-          url: raw.url ?? "",
-          price: raw.price,
-          note: raw.note,
-          deadline: raw.deadline,
-          createdAt: raw.createdAt ?? new Date().toISOString(),
-          completed: raw.completed ?? false,
-          completedAt: raw.completedAt,
-          thumbnailUrl: (raw as WishlistItem).thumbnailUrl,
-          category,
-          originalPrice: (raw as WishlistItem).originalPrice ?? raw.price,
-          currentPrice: (raw as WishlistItem).currentPrice ?? raw.price,
-          priceHistory: (raw as WishlistItem).priceHistory,
-          lastPriceCheckAt: (raw as WishlistItem).lastPriceCheckAt,
-          notifyOnDrop: (raw as WishlistItem).notifyOnDrop ?? false,
+  // Check if we should show price check notification
+  useEffect(() => {
+    const checkForNightlyUpdate = () => {
+      const now = new Date()
+      const currentHour = now.getHours()
+      const today = now.toDateString()
+      const lastNotificationDate = localStorage.getItem('lastPriceCheckNotificationDate')
+      
+      // Show notification if it's after 21:00 and we haven't shown it today
+      if (currentHour >= 21 && lastNotificationDate !== today) {
+        // Check if any items have been checked today
+        const hasRecentCheck = items.some(item => {
+          if (!item.lastPriceCheckAt) return false
+          const checkDate = new Date(item.lastPriceCheckAt)
+          return checkDate.toDateString() === today && checkDate.getHours() >= 21
+        })
+        
+        if (hasRecentCheck) {
+          setShowPriceCheckNotification(true)
+          localStorage.setItem('lastPriceCheckNotificationDate', today)
         }
+      }
+    }
+    
+    if (items.length > 0) {
+      checkForNightlyUpdate()
+    }
+  }, [items])
 
-        // Als thumbnailUrl nog een favicon is, negeren we die zodat alleen eigen uploads overblijven
-        if (base.url && base.thumbnailUrl) {
-          try {
-            const parsedUrl = new URL(base.url)
-            const faviconUrl = `${parsedUrl.origin}/favicon.ico`
-            if (base.thumbnailUrl === faviconUrl) {
-              base.thumbnailUrl = undefined
+  // Load items from backend on mount
+  useEffect(() => {
+    const loadFromBackend = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/wishlist')
+        if (response.ok) {
+          const data = await response.json()
+          
+          // If backend is empty, check localStorage for migration
+          if (data.length === 0) {
+            const saved = localStorage.getItem("wishlist")
+            if (saved) {
+              try {
+                const localItems = JSON.parse(saved)
+                if (localItems.length > 0) {
+                  console.log("Migrating", localItems.length, "items from localStorage to backend...")
+                  // Migrate to backend
+                  await fetch('http://localhost:3001/wishlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(localItems),
+                  })
+                  setItems(localItems)
+                  // Remove from localStorage after successful migration
+                  localStorage.removeItem("wishlist")
+                  console.log("Migration complete. localStorage cleared.")
+                  return
+                }
+              } catch (err) {
+                console.error("Error during migration:", err)
+              }
             }
-          } catch {
-            // als de URL ongeldig is, doen we niets
+          }
+          
+          setItems(data)
+          localStorage.setItem("wishlist", JSON.stringify(data))
+        } else {
+          // Fallback to localStorage if backend is not available
+          const saved = localStorage.getItem("wishlist")
+          if (saved) {
+            setItems(JSON.parse(saved))
           }
         }
-
-        // Initialiseer een eenvoudige priceHistory als die nog niet bestaat maar er wél een prijs is
-        if (!base.priceHistory && typeof base.price === 'number') {
-          base.priceHistory = [{ date: base.createdAt, price: base.price }]
+      } catch (error) {
+        console.error("Error loading from backend, using localStorage:", error)
+        const saved = localStorage.getItem("wishlist")
+        if (saved) {
+          try {
+            setItems(JSON.parse(saved))
+          } catch {
+            setItems([])
+          }
         }
-
-        return base
-      })
-
-      return withDefaults
-    } catch (error) {
-      console.error("Error loading wishlist from localStorage:", error)
-      return []
+      } finally {
+        setIsLoadingFromBackend(false)
+      }
     }
-  })
+    loadFromBackend()
+  }, [])
 
-  const [showAddForm, setShowAddForm] = useState(false)
-
-  // Save items to localStorage whenever they change
+  // Sync items to backend and localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem("wishlist", JSON.stringify(items))
-  }, [items])
+    if (isLoadingFromBackend) return
+    
+    const syncToBackend = async () => {
+      try {
+        await fetch('http://localhost:3001/wishlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(items),
+        })
+        localStorage.setItem("wishlist", JSON.stringify(items))
+      } catch (error) {
+        console.error("Error syncing to backend, saving to localStorage only:", error)
+        localStorage.setItem("wishlist", JSON.stringify(items))
+      }
+    }
+    syncToBackend()
+  }, [items, isLoadingFromBackend])
+
+  // Auto-refresh wishlist data every 60 seconds
+  useEffect(() => {
+    if (isLoadingFromBackend) return
+
+    const refreshData = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/wishlist')
+        if (response.ok) {
+          const data = await response.json()
+          // Only update if data has actually changed to avoid unnecessary re-renders
+          if (JSON.stringify(data) !== JSON.stringify(items)) {
+            setItems(data)
+            localStorage.setItem("wishlist", JSON.stringify(data))
+          }
+        }
+      } catch (error) {
+        console.error("Error auto-refreshing data:", error)
+      }
+    }
+
+    const intervalId = setInterval(refreshData, 60000) // 60 seconds
+
+    return () => clearInterval(intervalId)
+  }, [isLoadingFromBackend, items])
 
   // Add new item
   const addItem = (item: Omit<WishlistItem, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => {
@@ -121,13 +194,48 @@ function App() {
     )
   }
 
+  const checkPrices = async () => {
+    try {
+      setIsPriceCheckComplete(false)
+      await fetch('http://localhost:3001/check-prices', { method: 'POST' })
+      // Reload items after price check - wait 5 seconds for backend to complete
+      setTimeout(async () => {
+        const response = await fetch('http://localhost:3001/wishlist')
+        if (response.ok) {
+          const data = await response.json()
+          setItems(data)
+          localStorage.setItem("wishlist", JSON.stringify(data))
+          setIsPriceCheckComplete(true)
+          setTimeout(() => setIsPriceCheckComplete(false), 3000)
+        }
+      }, 5000)
+    } catch (error) {
+      console.error("Error checking prices:", error)
+    }
+  }
+
   const recentItems = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8)
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Onze Wishlist</h1>
-        <p>Deel je wensen met elkaar</p>
+        <div className="header-content">
+          <div className="header-text">
+            <h1>Onze Wishlist</h1>
+            <p>Deel je wensen met elkaar</p>
+          </div>
+          <button 
+            onClick={checkPrices} 
+            className={`price-check-header-btn ${isPriceCheckComplete ? 'complete' : ''}`}
+          >
+            <svg className="price-check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 12C4 7.58172 7.58172 4 12 4C14.5264 4 16.7792 5.17108 18.2454 7M20 12C20 16.4183 16.4183 20 12 20C9.47362 20 7.22075 18.8289 5.75463 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M18 3V7H14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M6 21V17H10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="price-check-text">Check prijzen</span>
+          </button>
+        </div>
 
         <nav className="app-nav">
           <Link to="/" className="nav-link">Overzicht</Link>
@@ -188,6 +296,25 @@ function App() {
           />
         </Routes>
       </main>
+      <Notepad />
+      
+      {showPriceCheckNotification && (
+        <div className="price-check-notification-overlay" onClick={() => setShowPriceCheckNotification(false)}>
+          <div className="price-check-notification" onClick={(e) => e.stopPropagation()}>
+            <div className="price-check-notification-icon">✓</div>
+            <h3 className="price-check-notification-title">Prijzen gecheckt!</h3>
+            <p className="price-check-notification-message">
+              De automatische prijscheck van 21:00 is uitgevoerd.
+            </p>
+            <button 
+              className="price-check-notification-btn"
+              onClick={() => setShowPriceCheckNotification(false)}
+            >
+              Begrepen
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -203,6 +330,9 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
     category: 'overig' as Category,
   })
   const [showDetails, setShowDetails] = useState(false)
+  const [isScrapingUrl, setIsScrapingUrl] = useState(false)
+  const [scrapedImageUrl, setScrapedImageUrl] = useState<string | undefined>(undefined)
+  const urlDebounceTimerRef = useRef<number | null>(null)
 
   const suggestCategory = (title: string, url: string): Category => {
     const lowerTitle = title.toLowerCase()
@@ -342,7 +472,7 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
       price: formData.price ? parseFloat(formData.price) : undefined,
       deadline: formData.deadline || undefined,
       note: formData.note.trim() || undefined,
-      thumbnailUrl: undefined,
+      thumbnailUrl: scrapedImageUrl,
       category: finalCategory,
     })
 
@@ -355,6 +485,43 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
       note: '',
       category: 'overig' as Category,
     })
+    setScrapedImageUrl(undefined)
+  }
+
+  const handleUrlBlur = async () => {
+    const url = formData.url.trim()
+    if (!url) return
+
+    setIsScrapingUrl(true)
+    try {
+      const scraped = await scrapeUrl(url)
+      
+      setFormData((prev) => {
+        const next = { ...prev }
+        
+        // Auto-fill title if empty and scraped title exists
+        if (!prev.title && scraped.title) {
+          next.title = scraped.title
+        }
+        
+        // Auto-fill price if empty and scraped price exists
+        if (!prev.price && scraped.price) {
+          next.price = scraped.price.toString()
+        }
+        
+        return next
+      })
+      
+      // Store scraped image
+      if (scraped.image) {
+        setScrapedImageUrl(scraped.image)
+      }
+      
+    } catch (error) {
+      console.error('Error during URL scraping:', error)
+    } finally {
+      setIsScrapingUrl(false)
+    }
   }
 
   const handleChange = (
@@ -366,6 +533,18 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
       const next = { ...prev, [name]: value }
 
       if (name === 'url') {
+        // Clear previous debounce timer
+        if (urlDebounceTimerRef.current) {
+          window.clearTimeout(urlDebounceTimerRef.current)
+        }
+        
+        // Set new debounce timer for scraping
+        if (value.trim()) {
+          urlDebounceTimerRef.current = window.setTimeout(() => {
+            handleUrlBlur()
+          }, 600)
+        }
+        
         const autoTitle = deriveTitleFromUrl(value)
         if (!prev.title && autoTitle) {
           next.title = autoTitle
@@ -394,13 +573,17 @@ function AddItemForm({ onAddItem }: { onAddItem: (item: Omit<WishlistItem, 'id' 
       <form onSubmit={handleSubmit} className="add-item-form">
         {/* Rij 1: URL, volledige breedte */}
         <div className="form-group">
-          <label htmlFor="url">URL *</label>
+          <label htmlFor="url">
+            URL *
+            {isScrapingUrl && <span className="scraping-indicator"> (Productinfo ophalen...)</span>}
+          </label>
           <input
             type="url"
             id="url"
             name="url"
             value={formData.url}
             onChange={handleChange}
+            onBlur={handleUrlBlur}
             placeholder="https://..."
             required
           />
@@ -551,6 +734,17 @@ function ItemList({
     }).format(price)
   }
 
+  const formatLastCheckDate = (dateString: string): string => {
+    const date = new Date(dateString)
+    return date.toLocaleString('nl-NL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
   const getShopName = (url: string): string => {
     try {
       const parsed = new URL(url)
@@ -658,13 +852,10 @@ function ItemList({
                 ) : (
                   <>
                     <label
+                      htmlFor={`upload-${item.id}`}
                       className="image-upload-placeholder"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setActivePasteItemId(item.id)
-                        if (pasteInputRef.current) {
-                          pasteInputRef.current.focus()
-                        }
                       }}
                     >
                       <span className="plus-icon">+</span>
@@ -696,9 +887,26 @@ function ItemList({
                 </div>
 
                 <div className="item-footer">
-                  {item.price && (
+                  {item.currentPrice && item.originalPrice && item.currentPrice < item.originalPrice ? (
+                    <div className="item-price-section">
+                      <div className="price-drop-label">🎉 Prijs gedaald!</div>
+                      <div className="item-price-comparison">
+                        <span className="original-price">{formatPrice(item.originalPrice)}</span>
+                        <span className="current-price">{formatPrice(item.currentPrice)}</span>
+                      </div>
+                    </div>
+                  ) : item.currentPrice ? (
+                    <div className="item-price-pill">
+                      {formatPrice(item.currentPrice)}
+                    </div>
+                  ) : item.price ? (
                     <div className="item-price-pill">
                       {formatPrice(item.price)}
+                    </div>
+                  ) : null}
+                  {item.lastPriceCheckAt && (
+                    <div className="last-check-date">
+                      Laatste check: {formatLastCheckDate(item.lastPriceCheckAt)}
                     </div>
                   )}
                 </div>

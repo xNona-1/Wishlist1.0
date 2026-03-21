@@ -30,13 +30,24 @@ body {
 
 /* Header */
 .app-header {
-  text-align: center;
   margin-bottom: 32px;
   padding: 20px;
   background: linear-gradient(135deg, #3f6d61 0%, #35524A 100%);
   color: white;
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-text {
+  text-align: center;
+  flex: 1;
 }
 
 .app-header h1 {
@@ -50,12 +61,52 @@ body {
   opacity: 0.9;
 }
 
+.price-check-header-btn {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background-color: white;
+  color: #35524A;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.price-check-header-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.price-check-header-btn.complete {
+  background-color: #22c55e;
+  color: white;
+}
+
+.price-check-icon {
+  width: 32px;
+  height: 32px;
+  color: #35524A;
+}
+
+.price-check-header-btn.complete .price-check-icon {
+  color: white;
+}
+
+.price-check-text {
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .app-nav {
-  margin-top: 16px;
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
   justify-content: center;
-  gap: 8px;
 }
 
 .nav-link {
@@ -71,6 +122,7 @@ body {
 .nav-link:hover {
   background-color: rgba(255, 255, 255, 0.28);
 }
+
 
 /* Main content */
 .app-main {
@@ -90,6 +142,7 @@ body {
 .page-top {
   flex-shrink: 0;
 }
+
 
 .page-scroll {
   flex: 1;
@@ -118,7 +171,7 @@ body {
   border: none;
   border-radius: 0;
   padding: 8px 20px;
-  background-color: #d5e5e0;
+  background-color: #c6dad4;
   color: #6b7280;
   font-size: 0.9rem;
   font-weight: 500;
@@ -133,13 +186,13 @@ body {
 }
 
 .add-item-toggle:hover {
-  background-color: #c6dad4;
+  background-color: #b8d0c9;
   transform: translateY(-0.5px);
   box-shadow: 0 2px 4px rgba(15, 23, 42, 0.16);
 }
 
 .add-item-toggle.open {
-  background-color: #bfd3cd;
+  background-color: #c6dad4;
 }
 
 .add-item-toggle-label {
@@ -214,6 +267,13 @@ body {
   font-weight: 600;
   color: #555;
   font-size: 0.9rem;
+}
+
+.scraping-indicator {
+  font-weight: 400;
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .form-group input,
@@ -605,8 +665,10 @@ body {
   margin-top: auto;
   padding-top: 18px;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 8px;
 }
 
 .item-price-pill {
@@ -617,6 +679,46 @@ body {
   font-weight: 600;
   font-size: 0.95rem;
   box-shadow: 0 2px 8px rgba(53, 82, 74, 0.35);
+}
+
+.item-price-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.price-drop-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #16a34a;
+  background-color: #dcfce7;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.item-price-comparison {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.original-price {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+
+.current-price {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.last-check-date {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
 }
 
 .item-delete-btn {
@@ -743,4 +845,90 @@ body {
   .item-card {
     padding: 15px;
   }
+}
+
+/* Price check notification pop-up */
+.price-check-notification-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+.price-check-notification {
+  background-color: white;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.price-check-notification-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-weight: bold;
+}
+
+.price-check-notification-title {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.price-check-notification-message {
+  margin: 0 0 24px;
+  font-size: 1rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.price-check-notification-btn {
+  padding: 12px 32px;
+  border: none;
+  border-radius: 8px;
+  background-color: #35524A;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.price-check-notification-btn:hover {
+  background-color: #2a4139;
+  transform: translateY(-1px);
+}
+
+.price-check-notification-btn:active {
+  transform: translateY(0);
 }
