@@ -146,6 +146,7 @@ function saveWishlist(items) {
 
 const getChromePath = () => {
   const paths = [
+    '/opt/render/project/src/.puppeteer-cache/chrome/linux-146.0.7680.153/chrome-linux64/chrome',
     '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome',
     '/usr/bin/google-chrome-stable',
     '/usr/bin/google-chrome',
