@@ -169,9 +169,12 @@ async function scrapePrice(url) {
   let browser;
   try {
     debugLog('DEBUG', 'scrapePrice', `Starten prijscheck voor: ${url}`);
+    const chromePath = getChromePath();
+    console.log('Gevonden Chrome pad:', chromePath);
+
     browser = await puppeteer.launch({
       headless: true,
-      executablePath: getChromePath(),
+      executablePath: chromePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -229,9 +232,12 @@ app.get("/scrape", async (req, res) => {
 
   let browser;
   try {
+    const chromePath = getChromePath();
+    console.log('Gevonden Chrome pad:', chromePath);
+
     browser = await puppeteer.launch({
       headless: true,
-      executablePath: getChromePath(),
+      executablePath: chromePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
