@@ -45,7 +45,7 @@ function App() {
   useEffect(() => {
     const loadFromBackend = async () => {
       try {
-        const response = await fetch('http://localhost:3001/wishlist')
+        const response = await fetch('https://wishlist-backend-7t1r.onrender.com/wishlist')
         if (response.ok) {
           const data = await response.json()
           
@@ -58,7 +58,7 @@ function App() {
                 if (localItems.length > 0) {
                   console.log("Migrating", localItems.length, "items from localStorage to backend...")
                   // Migrate to backend
-                  await fetch('http://localhost:3001/wishlist', {
+                  await fetch('https://wishlist-backend-7t1r.onrender.com/wishlist', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(localItems),
@@ -107,7 +107,7 @@ function App() {
     
     const syncToBackend = async () => {
       try {
-        await fetch('http://localhost:3001/wishlist', {
+        await fetch('https://wishlist-backend-7t1r.onrender.com/wishlist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(items),
@@ -127,7 +127,7 @@ function App() {
 
     const refreshData = async () => {
       try {
-        const response = await fetch('http://localhost:3001/wishlist')
+        const response = await fetch('https://wishlist-backend-7t1r.onrender.com/wishlist')
         if (response.ok) {
           const data = await response.json()
           // Only update if data has actually changed to avoid unnecessary re-renders
@@ -197,10 +197,10 @@ function App() {
   const checkPrices = async () => {
     try {
       setIsPriceCheckComplete(false)
-      await fetch('http://localhost:3001/check-prices', { method: 'POST' })
+      await fetch('https://wishlist-backend-7t1r.onrender.com/check-prices', { method: 'POST' })
       // Reload items after price check - wait 5 seconds for backend to complete
       setTimeout(async () => {
-        const response = await fetch('http://localhost:3001/wishlist')
+        const response = await fetch('https://wishlist-backend-7t1r.onrender.com/wishlist')
         if (response.ok) {
           const data = await response.json()
           setItems(data)

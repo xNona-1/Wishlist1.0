@@ -5,7 +5,7 @@ export async function scrapeUrl(url: string): Promise<{
 }> {
   try {
     const response = await fetch(
-      `http://localhost:3001/scrape?url=${encodeURIComponent(url)}` 
+      `https://wishlist-backend-7t1r.onrender.com/scrape?url=${encodeURIComponent(url)}` 
     );
 
     if (!response.ok) throw new Error("Backend niet bereikbaar");

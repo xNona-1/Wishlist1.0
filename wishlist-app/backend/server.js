@@ -144,6 +144,26 @@ function saveWishlist(items) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(items, null, 2));
 }
 
+const getChromePath = () => {
+  const paths = [
+    '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ];
+  
+  for (const p of paths) {
+    try {
+      fs.accessSync(p);
+      return p;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+};
+
 // Herbruikbare scrape functie voor prijscheck
 async function scrapePrice(url) {
   let browser;
@@ -151,9 +171,7 @@ async function scrapePrice(url) {
     debugLog('DEBUG', 'scrapePrice', `Starten prijscheck voor: ${url}`);
     browser = await puppeteer.launch({
       headless: true,
-      executablePath: '/usr/bin/google-chrome-stable' 
-        || '/usr/bin/chromium-browser' 
-        || '/usr/bin/chromium',
+      executablePath: getChromePath(),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -213,9 +231,7 @@ app.get("/scrape", async (req, res) => {
   try {
     browser = await puppeteer.launch({
       headless: true,
-      executablePath: '/usr/bin/google-chrome-stable' 
-        || '/usr/bin/chromium-browser' 
-        || '/usr/bin/chromium',
+      executablePath: getChromePath(),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -432,6 +448,7 @@ app.listen(3001, () => {
   debugLog('SUCCESS', 'Server', '✅ Backend gestart op http://localhost:3001');
   debugLog('INFO', 'Server', '📊 Debug logging actief');
   debugLog('INFO', 'Server', '🌙 Nachtelijke prijscheck: elke dag om 21:00');
+  debugLog('INFO', 'Server', `🌐 Chrome pad: ${getChromePath() || 'NIET GEVONDEN'}`);
   debugLog('INFO', 'Server', `📁 Data bestand: ${DATA_FILE}`);
   debugLog('INFO', 'Server', `📝 Debug log: ${DEBUG_LOG_FILE}`);
   debugLog('INFO', 'Server', `❌ Error log: ${ERROR_LOG_FILE}`);
