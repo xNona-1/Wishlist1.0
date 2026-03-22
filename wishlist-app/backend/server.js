@@ -315,6 +315,17 @@ app.get("/wishlist", (req, res) => {
   res.json(items);
 });
 
+// Debug endpoint to find Chrome on server
+app.get('/find-chrome', (req, res) => {
+  const { execSync } = require('child_process');
+  try {
+    const result = execSync('find /opt/render -name "chrome" -type f 2>/dev/null').toString();
+    res.json({ found: result.trim().split('\n') });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // Test email endpoint
 app.get('/test-email', async (req, res) => {
   try {
