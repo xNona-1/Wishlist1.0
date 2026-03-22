@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: wishlist-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
