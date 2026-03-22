@@ -128,7 +128,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const DATA_FILE = path.join(__dirname, "../src/data/wishlist.json");
+const DATA_FILE = process.env.DATA_FILE || '/data/wishlist.json';
 
 function loadWishlist() {
   try {
