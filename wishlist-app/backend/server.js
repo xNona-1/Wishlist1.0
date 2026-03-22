@@ -187,9 +187,7 @@ async function scrapePrice(url) {
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
     debugLog('DEBUG', 'scrapePrice', 'Browser gelanceerd, pagina laden...');
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-
-    // Wacht extra op productinfo
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     const result = await page.evaluate(() => {
       const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
@@ -198,13 +196,28 @@ async function scrapePrice(url) {
       const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
       const image = ogImage || null;
 
-      // Prijs selectors voor Coolblue
-      const priceEl = document.querySelector('[class*="sales-price"], [class*="Price"], [data-test="price"], .js-sales-price');
+      // Meerdere prijs selectors proberen
+      const priceSelectors = [
+        '[data-test="sales-price"]',
+        '[class*="sales-price"]',
+        '[class*="SalesPrice"]', 
+        '[class*="price"]',
+        '[itemprop="price"]',
+        '[data-price]',
+      ];
+
       let price = null;
-      if (priceEl) {
-        const text = priceEl.innerText || priceEl.getAttribute('content');
-        const match = text?.match(/(\d+)[,.](\d{2})/);
-        if (match) price = parseFloat(`${match[1]}.${match[2]}`);
+      for (const selector of priceSelectors) {
+        const els = document.querySelectorAll(selector);
+        for (const el of els) {
+          const text = el.getAttribute('content') || el.innerText;
+          const match = text?.match(/(\d+)[,.](\d{2})/);
+          if (match) {
+            price = parseFloat(`${match[1]}.${match[2]}`);
+            break;
+          }
+        }
+        if (price) break;
       }
 
       return { title, image, price };
@@ -252,9 +265,7 @@ app.get("/scrape", async (req, res) => {
     );
 
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-
-    // Wacht extra op productinfo
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     const result = await page.evaluate(() => {
       const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
@@ -263,13 +274,28 @@ app.get("/scrape", async (req, res) => {
       const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
       const image = ogImage || null;
 
-      // Prijs selectors voor Coolblue
-      const priceEl = document.querySelector('[class*="sales-price"], [class*="Price"], [data-test="price"], .js-sales-price');
+      // Meerdere prijs selectors proberen
+      const priceSelectors = [
+        '[data-test="sales-price"]',
+        '[class*="sales-price"]',
+        '[class*="SalesPrice"]', 
+        '[class*="price"]',
+        '[itemprop="price"]',
+        '[data-price]',
+      ];
+
       let price = null;
-      if (priceEl) {
-        const text = priceEl.innerText || priceEl.getAttribute('content');
-        const match = text?.match(/(\d+)[,.](\d{2})/);
-        if (match) price = parseFloat(`${match[1]}.${match[2]}`);
+      for (const selector of priceSelectors) {
+        const els = document.querySelectorAll(selector);
+        for (const el of els) {
+          const text = el.getAttribute('content') || el.innerText;
+          const match = text?.match(/(\d+)[,.](\d{2})/);
+          if (match) {
+            price = parseFloat(`${match[1]}.${match[2]}`);
+            break;
+          }
+        }
+        if (price) break;
       }
 
       return { title, image, price };
