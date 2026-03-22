@@ -186,30 +186,28 @@ async function scrapePrice(url) {
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
     debugLog('DEBUG', 'scrapePrice', 'Browser gelanceerd, pagina laden...');
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Wacht extra op productinfo
+    await page.waitForTimeout(2000);
 
     const result = await page.evaluate(() => {
-      const priceSelectors = [
-        '[class*="price"]',
-        '[class*="Price"]',
-        '[data-price]',
-        '[itemprop="price"]',
-        '.sales-price',
-        '.product-price',
-      ];
+      const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
+      const title = ogTitle || document.title || null;
+      
+      const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+      const image = ogImage || null;
+
+      // Prijs selectors voor Coolblue
+      const priceEl = document.querySelector('[class*="sales-price"], [class*="Price"], [data-test="price"], .js-sales-price');
       let price = null;
-      for (const selector of priceSelectors) {
-        const el = document.querySelector(selector);
-        if (el) {
-          const text = el.getAttribute("content") || el.innerText;
-          const match = text?.match(/(\d+)[,.](\d{2})/);
-          if (match) {
-            price = parseFloat(`${match[1]}.${match[2]}`);
-            break;
-          }
-        }
+      if (priceEl) {
+        const text = priceEl.innerText || priceEl.getAttribute('content');
+        const match = text?.match(/(\d+)[,.](\d{2})/);
+        if (match) price = parseFloat(`${match[1]}.${match[2]}`);
       }
-      return { price };
+
+      return { title, image, price };
     });
 
     debugLog('SUCCESS', 'scrapePrice', `Prijs gevonden: €${result.price || 'geen'}`);
@@ -253,38 +251,25 @@ app.get("/scrape", async (req, res) => {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Wacht extra op productinfo
+    await page.waitForTimeout(2000);
 
     const result = await page.evaluate(() => {
-      // Titel
-      const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content");
+      const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
       const title = ogTitle || document.title || null;
-
-      // Afbeelding
-      const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute("content");
+      
+      const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
       const image = ogImage || null;
 
-      // Prijs — probeer meerdere bekende selectors
-      const priceSelectors = [
-        '[class*="price"]',
-        '[class*="Price"]',
-        '[data-price]',
-        '[itemprop="price"]',
-        '.sales-price',
-        '.product-price',
-      ];
-
+      // Prijs selectors voor Coolblue
+      const priceEl = document.querySelector('[class*="sales-price"], [class*="Price"], [data-test="price"], .js-sales-price');
       let price = null;
-      for (const selector of priceSelectors) {
-        const el = document.querySelector(selector);
-        if (el) {
-          const text = el.getAttribute("content") || el.innerText;
-          const match = text?.match(/(\d+)[,.](\d{2})/);
-          if (match) {
-            price = parseFloat(`${match[1]}.${match[2]}`);
-            break;
-          }
-        }
+      if (priceEl) {
+        const text = priceEl.innerText || priceEl.getAttribute('content');
+        const match = text?.match(/(\d+)[,.](\d{2})/);
+        if (match) price = parseFloat(`${match[1]}.${match[2]}`);
       }
 
       return { title, image, price };
